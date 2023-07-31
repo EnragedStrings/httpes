@@ -10,7 +10,7 @@ local m = require("component").modem
 local data = require("component").data
 local uuid = require("uuid")
 
-local debug = true
+local debug = false
 
 local function debugprint(...)
     if debug then
