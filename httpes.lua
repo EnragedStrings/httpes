@@ -99,7 +99,7 @@ end
 ---@param key 'string' The private key to decrypt the data
 ---@param decrypt 'bool' 
 ---@return output The unserialized/decrypted table
-local function unserialize(data, key, decrypt)
+function unserialize(data, key, decrypt)
     local newData = data
     if key ~= nil and decrypt == true then
         newData = decrypt(newData, key)
