@@ -10,11 +10,11 @@ local m = require("component").modem
 local data = require("component").data
 local uuid = require("uuid")
 
-local debug = false
+local debug = true
 
-local function debugprint(text)
+local function debugprint(...)
     if debug then
-        print(text)
+        print(...)
     end
 end
 
@@ -61,15 +61,16 @@ end
 ---@param data 'string' Input data for encryption
 ---@param publicKey 'string' Input the public key to encrypt the data
 ---@return data The encrypted data
-local function encrypt(data, publicKey)
-    return data.encrypt(data, publicKey)
+local function encrypt(messagedata, publicKey)
+    return data.encrypt(messagedata, publicKey)
 end
 ---Decrypts data with the private key.
 ---@param data 'string' Input encrypted data for decryption
 ---@param privateKey 'string' Input the private key to decrypt the data
 ---@return data The decrypted data
-local function decrypt(data, privateKey)
-    return data.decrypt(data, privateKey)
+local function decrypt(messagedata, privateKey)
+    debugprint("DECRYPTING", privateKey, messagedata)
+    return data.decrypt(messagedata, privateKey)
 end
 ---Sends the data to the UUID and port specified, with provided flags.
 ---@param UUID 'UUID | string' the UUID of the recieving modem
@@ -79,10 +80,13 @@ end
 ---@return bool if sucessfully sent or not
 local function sendData(UUID, port, data, flags)
     local flags, flagBool = flagChecker(flags, {publicKey = ""})
+    debugprint("UNSERIALIZED: ", data.HEADER, data.TYPE, data.METHOD)
+    debugprint("UNSERIALIZED: ", data.TO_SOCKET, data.FROM_SOCKET)
     local serialData = serial.serialize(data)
     if flagBool.publicKey then
         serialData = encrypt(serialData, flags.publicKey)
     end
+    debugprint("SERIAL DATA: ", serialData)
     return m.send(UUID, port, serialData)
 end
 ---Creates a public and private key.
@@ -99,9 +103,9 @@ end
 ---@param key 'string' The private key to decrypt the data
 ---@param decrypt 'bool' 
 ---@return output The unserialized/decrypted table
-function unserialize(data, key, decrypt)
+function unserialize(data, key, decryptBool)
     local newData = data
-    if key ~= nil and decrypt == true then
+    if key ~= nil and key ~= "" and decryptBool == true then
         newData = decrypt(newData, key)
     end
     newData = serial.unserialize(data)
@@ -118,7 +122,7 @@ local defaultData = {
 }
 ---Generates a new table filled with default data for sending messages
 ---@return newData 'table'
-local function newData()
+function newData()
     local newData = setmetatable({}, { __index = defaultData })
     return newData
 end
@@ -206,6 +210,7 @@ local defaultSocket = {
         data.HEADER = "SEND"
         data.FROM_SOCKET = self.UUID
         debugprint("Sending Handshake...")
+        debugprint(data.FROM_SOCKET)
         if sendData(self.address, self.port, data) then
             self.status = "CONNECTING"
             return true
@@ -286,7 +291,10 @@ function createSocket(address, port, encrypted)
     socket:setOwnKeys(createKeys())
     debugprint("Creating Handshake Method")
     socket:newMethod("HANDSHAKE", function(data, self)
+        debugprint("HANDSHAKE CALLBACK")
         if data.HEADER == "SEND" and self.status == "DISCONNECTED" then
+            debugprint("SENDING RETURN HANDSHAKE")
+            self.otherKeys.public = data.BODY
             local response = newData()
             response.METHOD = "HANDSHAKE"
             response.BODY = self.selfKeys.public
@@ -294,14 +302,18 @@ function createSocket(address, port, encrypted)
             response.HEADER = "RECIEVE"
             response.FROM_SOCKET = self.UUID
             response.TO_SOCKET = data.FROM_SOCKET
-            if sendData(self.address, self.port, data) then
+            if sendData(self.address, self.port, response) then
                 self.status = "CONNECTED"
                 return true
             else
                 return false
             end
         elseif data.HEADER == "RECIEVE" and self.status == "CONNECTING" and data.TO_SOCKET == self.UUID then
+            debugprint("GOT RETURN HANDSHAKE")
             self.status = "CONNECTED"
+        else
+            debugprint("UNEXPECTED ERROR")
+            debugprint(data.HEADER, self.status, data.TO_SOCKET, self.UUID)
         end
     end)
     debugprint("Creating Ping Method")
