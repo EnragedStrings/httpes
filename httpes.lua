@@ -169,7 +169,7 @@ local defaultSocket = {
         debugprint(from, self.address, port, self.port)
         if from == self.address and port == self.port then
             debugprint("Socket Found")
-            local decrypt = function() if self.status == "CONNECTED" then return true else return false end end
+            local decrypt = function() if self.status == "CONNECTED" and self.encrypted then return true else return false end end
             local data = unserialize(message, self.selfKeys.private, decrypt())
             local bool, callback = self:checkMethods(data.METHOD)
             if bool and (callbackBool == nil or callbackBool == true) then
